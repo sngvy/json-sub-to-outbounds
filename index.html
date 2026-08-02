@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Конвертер JSON-подписок</title>
+
+    <!-- Подключение шрифта -->
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Подключение библиотек для ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #212529;
+            --text-muted: #6c757d;
+            --border: #dee2e6;
+            --primary: #309dd8;
+            --accent: #f5a623;
+            --success-bg: #d4edda;
+            --success-text: #155724;
+            --error-bg: #f8d7da;
+            --error-text: #721c24;
+            --loading-bg: #d1ecf1;
+            --loading-text: #0c5460;
+            --shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #121212;
+                --card-bg: #1e1e1e;
+                --text: #e9ecef;
+                --text-muted: #adb5bd;
+                --border: #343a40;
+                --success-bg: #155724;
+                --success-text: #d4edda;
+                --error-bg: #721c24;
+                --error-text: #f8d7da;
+                --loading-bg: #0c5460;
+                --loading-text: #d1ecf1;
+                --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.22);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Unbounded', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 20px 16px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .description {
+            text-align: center;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        label {
+            display: block;
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-family: 'Unbounded', sans-serif !important;
+            background: var(--card-bg);
+            color: var(--text);
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(48, 157, 216, 0.2);
+        }
+
+        .action-bar {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .action-bar button {
+            padding: 16px 40px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            font-family: 'Unbounded', sans-serif;
+        }
+
+        .action-bar button:hover {
+            background: #e69500;
+        }
+
+        .action-bar button:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        #status {
+            display: none;
+            padding: 14px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin: 10px 0;
+            border: 1px solid var(--border);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #status.status-success,
+        #status.status-error,
+        #status.status-loading {
+            display: block;
+            opacity: 1;
+        }
+
+        .status-success {
+            background: var(--success-bg);
+            color: var(--success-text);
+        }
+
+        .status-error {
+            background: var(--error-bg);
+            color: var(--error-text);
+        }
+
+        .status-loading {
+            background: var(--loading-bg);
+            color: var(--loading-text);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Конвертер JSON-подписок</h1>
+            <p class="subtitle">в Xray outbounds для XKeen на роутерах Keenetic / Netcraze</p>
+        </header>
+
+        <div class="card">
+            <label>Ссылка на подписку</label>
+            <input type="text" id="url">
+        </div>
+
+        <div class="action-bar">
+            <button id="main-btn" onclick="convertAndDownload()">Конвертировать и скачать</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <footer>
+        Часть проекта <a href="https://t.me/snowyservices_bot" target="_blank">Snowy Services</a>
+    </footer>
+
+    <script>
+        const btn = document.getElementById('main-btn');
+        const statusEl = document.getElementById('status');
+
+        function setStatus(message, type = "") {
+            statusEl.textContent = message;
+            statusEl.className = "";
+            if (type) statusEl.classList.add(`status-${type}`);
+            statusEl.style.display = message ? "block" : "none";
+        }
+
+        async function convertAndDownload() {
+            const url = document.getElementById('url').value.trim();
+            if (!url) {
+                setStatus("Введите ссылку на подписку!", "error");
+                return;
+            }
+
+            btn.disabled = true;
+            setStatus("Загрузка конфигурации...", "loading");
+
+            // Единственный прокси: cors.sh с API-ключом.
+            const CORS_SH_API_KEY = "live_4d9c3813628fd875ee004f6c82510965ed6fbfe9009eef3b";
+            const proxyUrl = "https://proxy.cors.sh/" + url;
+
+            // Несколько попыток подряд на случай временного сбоя/rate-limit,
+            // с таймаутом на каждую попытку — агрессивный ретрай без лишних прокси.
+            async function tryCorsSh(targetUrl, attempts = 4, timeoutMs = 8000) {
+                for (let i = 0; i < attempts; i++) {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), timeoutMs);
+                    try {
+                        const response = await fetch(proxyUrl, {
+                            signal: controller.signal,
+                            headers: {
+                                "x-cors-api-key": CORS_SH_API_KEY
+                            }
+                        });
+                        clearTimeout(timer);
+                        if (!response.ok) continue;
+                        const text = await response.text();
+                        JSON.parse(text); // валидация
+                        return text;
+                    } catch {
+                        clearTimeout(timer);
+                    }
+                }
+                return null;
+            }
+
+            let configText = await tryCorsSh(url);
+
+            if (!configText) {
+                setStatus("Не удалось загрузить валидный JSON через cors.sh", "error");
+                btn.disabled = false;
+                return;
+            }
+
+            setStatus("Обработка конфигураций...", "loading");
+
+            let parsed;
+            try {
+                parsed = JSON.parse(configText);
+            } catch {
+                setStatus("Ошибка парсинга JSON", "error");
+                btn.disabled = false;
+                return;
+            }
+
+            let configs = Array.isArray(parsed) ? parsed : [parsed];
+
+            const proxyProtocols = new Set([
+                "vless", "vmess", "trojan", "shadowsocks",
+                "socks", "http", "hysteria", "tuic", "wireguard"
+            ]);
+
+            const zip = new JSZip();
+            let fileCounter = 0;
+
+            for (let config of configs) {
+                let outbounds = config.outbounds || [];
+                if (!Array.isArray(outbounds)) continue;
+
+                let realProxies = outbounds.filter(ob => 
+                    ob && ob.protocol && proxyProtocols.has(ob.protocol.toLowerCase())
+                );
+                
+                let technicalOutbounds = outbounds.filter(ob => 
+                    ob && ob.protocol && !proxyProtocols.has(ob.protocol.toLowerCase())
+                );
+
+                for (let proxy of realProxies) {
+                    fileCounter++;
+                    
+                    const currentProxy = JSON.parse(JSON.stringify(proxy));
+                    currentProxy.tag = "vless-reality";
+
+                    const combinedOutbounds = [
+                        currentProxy, 
+                        ...JSON.parse(JSON.stringify(technicalOutbounds))
+                    ];
+
+                    const result = { outbounds: combinedOutbounds };
+                    zip.file(`04_outbounds_${fileCounter}.json`, JSON.stringify(result, null, 2));
+                }
+            }
+
+            if (fileCounter === 0) {
+                setStatus("Прокси-протоколы не найдены", "error");
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                const zipBlob = await zip.generateAsync({type: "blob"});
+                saveAs(zipBlob, "outbounds.zip");
+                setStatus(`Успешно! Скачано файлов: ${fileCounter}`, "success");
+            } catch (err) {
+                console.error(err);
+                setStatus("Ошибка при создании ZIP", "error");
+            }
+
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>
